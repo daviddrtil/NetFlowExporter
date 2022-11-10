@@ -11,7 +11,7 @@ Communication with the server is possible with web browser and tools like wget, 
 ## Getting started
 
 Via makefile compile and build project.
-Write command "make", which creates executable file "hinfosvc".
+Write command "make", which creates executable file "hinfosvc".   
 
 The server is executable with argument indicating port number.
 

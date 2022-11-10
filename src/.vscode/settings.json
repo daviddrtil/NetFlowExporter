@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "if_ether.h": "c",
+        "ether.h": "c",
+        "inet.h": "c",
+        "ip_icmp.h": "c",
+        "types.h": "c",
+        "stdint.h": "c"
+    }
+}
