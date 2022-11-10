@@ -175,7 +175,7 @@ void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args)
     // Fill out header informations
     nf_datagram->version = htons(5);
     nf_datagram->count = htons(1);
-    nf_datagram->SysUptime = htonl(0);      // todo
+    nf_datagram->SysUptime = htonl(1000);      // todo
     nf_datagram->unix_secs = htonl(0);      // todo
     nf_datagram->unix_nsecs = htonl(0);     // todo
     nf_datagram->flow_sequence = htonl(exported_flows);
