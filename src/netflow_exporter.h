@@ -71,7 +71,7 @@ typedef struct netflow_datagram_v5
 typedef struct bpf_program bpf_program_t;
 typedef struct timeval timeval_t;
 
-void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t current_time);
+void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t sysuptime, uint64_t current_time);
 
 // todo add other function definitions
 

@@ -34,8 +34,9 @@
 #define SOCKET_FUNCTION_FAILED 12
 #define INTERNAL_ERROR         99    // Allocation failed or failed to open file
 
-#define MILISECONDS 1000             // Miliseconds (ms) in second
-#define MIKROSECONDS 1000000         // Microseconds (us) in second
+#define MILISECONDS  1000       // Miliseconds (ms) in second
+#define MIKROSECONDS 1000000    // Microseconds (us) in second
+#define NANOSECONDS  1000000000 // Nanoseconds (ns) in second
 
 // Buffer sizes
 #define PORT_NUMBER_LENGHT 6

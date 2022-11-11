@@ -174,13 +174,23 @@ uint64_t convert_timeval2int(timeval_t *time)
     return time->tv_sec * MIKROSECONDS + time->tv_usec;
 }
 
-void send_netflow()
+void send_netflow(int socket_id, uint8_t *data, int flags)
 {
-
+    int send_status = send(socket_id, data, NETFLOW_DATAGRAM_V5_SIZE, flags);
+    if (send_status == -1)
+    {
+        fprintf(stderr, "Failed to send data to server with function send().\n");
+        exit(SOCKET_FUNCTION_FAILED);
+    }
+    else if (send_status != NETFLOW_DATAGRAM_V5_SIZE)
+    {
+        fprintf(stderr, "Failed to send data to server with function send(). Buffer written partially.\n");
+        exit(SOCKET_FUNCTION_FAILED);
+    }
 }
 
 // Parse to netflow v5 format
-void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t current_time)
+void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t sysuptime, uint64_t current_time)
 {
     // Neat print - DEBUG only! // todo smazat
     char src_ip[IPV4_ADDRESS_LENGHT] = {'\0'};
@@ -192,22 +202,25 @@ void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t cur
     printf("Exported nf with: %s:%d -> %s:%d.\n", src_ip, src_port, dst_ip, dst_port);
 
     static int exported_flows = 0;
-    char compressed_datagram[NETFLOW_DATAGRAM_V5_SIZE];
+    uint8_t compressed_datagram[NETFLOW_DATAGRAM_V5_SIZE];
     netflow_datagram_v5_t *nf_datagram = (netflow_datagram_v5_t *)compressed_datagram;
+
+    nf_data_t *nf_data = nf_to_export->data;
+    uint64_t start_netflow_time = nf_data->first_sys - sysuptime;
+    uint64_t end_netflow_time   = nf_data->last_sys - sysuptime;
 
     // Fill out header informations
     nf_datagram->version = htons(5);
     nf_datagram->count = htons(1);
-    nf_datagram->SysUptime = htonl(0);      // todo
-    nf_datagram->unix_secs = htonl(0);      // todo
-    nf_datagram->unix_nsecs = htonl(0);     // todo
+    nf_datagram->SysUptime = htonl(sysuptime / MILISECONDS);
+    nf_datagram->unix_secs = htonl(current_time / MIKROSECONDS);
+    nf_datagram->unix_nsecs = htonl((current_time * 1000) % NANOSECONDS);
     nf_datagram->flow_sequence = htonl(exported_flows);
     nf_datagram->engine_type = 0;
     nf_datagram->engine_id = 0;
     nf_datagram->sampling_interval = 0;
 
     // Fill out flow record informations
-    nf_data_t *nf_data = nf_to_export->data;
     nf_datagram->srcaddr = nf_data->key->src_ip;
     nf_datagram->dstaddr = nf_data->key->dst_ip;
     nf_datagram->nexthop = 0;
@@ -215,8 +228,8 @@ void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t cur
     nf_datagram->output = 0;
     nf_datagram->dPkts = htonl(nf_data->dPkts);
     nf_datagram->dOctets = htonl(nf_data->dOctets);
-    nf_datagram->First = htonl(0);     // todo nf_data->first_sys
-    nf_datagram->Last = htonl(0);      // todo nf_data->last_sys
+    nf_datagram->First = start_netflow_time < 0 ? 0 : htonl(start_netflow_time / MILISECONDS);
+    nf_datagram->Last = end_netflow_time < 0 ? 0 : htonl(end_netflow_time / MILISECONDS);
     nf_datagram->srcport = nf_data->key->src_port;
     nf_datagram->dstport = nf_data->key->dst_port;
     nf_datagram->pad1 = 0;
@@ -229,30 +242,17 @@ void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t cur
     nf_datagram->dst_mask = 0;
     nf_datagram->pad2 = 0;
 
-    int send_status = send(args->socket_id, compressed_datagram, 
-                            NETFLOW_DATAGRAM_V5_SIZE, nf_data->tcp_flags);
-    if (send_status == -1)
-    {
-        fprintf(stderr, "Failed to send data to server with function send().\n");
-        exit(SOCKET_FUNCTION_FAILED);
-    }
-    else if (send_status != NETFLOW_DATAGRAM_V5_SIZE)
-    {
-        fprintf(stderr, "Failed to send data to server with function send(). Buffer written partially.\n");
-        exit(SOCKET_FUNCTION_FAILED);
-    }
-
-    send_netflow();
+    send_netflow(args->socket_id, compressed_datagram, nf_data->tcp_flags);
     nf_delete(cache, nf_to_export);
     exported_flows++;
 }
 
-void check_timers(nf_cache_t *cache, args_t *args, uint64_t current_time)
+void check_timers(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t current_time)
 {
-    nf_t *tmp_nf = cache->first;
+    nf_t *tmp_nf = cache->last;
     while (tmp_nf != NULL)
     {
-        nf_t *tmp_nf_next = tmp_nf->next;
+        nf_t *tmp_nf_prev = tmp_nf->prev;
 
         uint64_t first_systime = tmp_nf->data->first_sys;
         uint64_t last_systime = tmp_nf->data->last_sys;
@@ -264,7 +264,7 @@ void check_timers(nf_cache_t *cache, args_t *args, uint64_t current_time)
             continue;
         }
 
-        if (active_diff >= args->active_interval || inactive_diff >= args->inactive_interval)
+        if (active_diff > args->active_interval || inactive_diff > args->inactive_interval)
         {
             // Neat print - DEBUG only! // todo smazat
             int ip_protocol = tmp_nf->data->key->ip_protocol;
@@ -275,15 +275,15 @@ void check_timers(nf_cache_t *cache, args_t *args, uint64_t current_time)
             else if (ip_protocol == UDP_PROTOCOL)
                 printf("UDP:");
 
-            if (active_diff >= args->active_interval)
+            if (active_diff > args->active_interval)
                 printf("Active\n");
             else
                 printf("Inactive\n");
 
             // Export outdated netflow
-            nf_export(cache, tmp_nf, args, current_time);
+            nf_export(cache, tmp_nf, args, sysuptime, current_time);
         }
-        tmp_nf = tmp_nf_next;
+        tmp_nf = tmp_nf_prev;
     }   // while
 }
 
@@ -318,14 +318,14 @@ void update_netflow(nf_t *nf_to_update, nf_data_t *tmp_data, uint64_t current_ti
 }
 
 // Exports remaining netflows in cache and dispose the cache 
-void export_remaining_nfs(nf_cache_t *cache, args_t *args, uint64_t current_time)
+void export_remaining_nfs(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t current_time)
 {
     nf_t *cur_nf = cache->last;
     nf_t *prev_nf;
     while (cur_nf != NULL)
     {
         prev_nf = cur_nf->prev;
-        nf_export(cache, cur_nf, args, current_time);
+        nf_export(cache, cur_nf, args, sysuptime, current_time);
         cur_nf = prev_nf;
     }
     free(cache);
@@ -337,14 +337,20 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
     nf_cache_init(cache);
 
     uint64_t current_time;
+    uint64_t sysuptime = 0;
     nf_data_t *tmp_data = nf_data_ctor();
 
     const u_char *frame;
     struct pcap_pkthdr pcap_metadata;
     while ((frame = pcap_next(pcap_file, &pcap_metadata)) != NULL)
     {
+        if (sysuptime == 0)
+        {
+            // Set sysuptime for capture time of the first packet
+            sysuptime = convert_timeval2int(&pcap_metadata.ts);
+        }
         current_time = convert_timeval2int(&pcap_metadata.ts);
-        check_timers(cache, args, current_time);
+        check_timers(cache, args, sysuptime, current_time);
 
         struct ether_header *eth_header = (struct ether_header *)frame;
         int ethernet_type = ntohs(eth_header->ether_type);
@@ -407,7 +413,7 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
             if (tcp_fin || tcp_reset)
             {
                 // TCP connection was ended, netflow can be exported
-                nf_export(cache, existing_nf, args, current_time);
+                nf_export(cache, existing_nf, args, sysuptime, current_time);
             }
         }
         else
@@ -416,7 +422,7 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
             if (cache->nf_cnt + 1 > args->flow_cache_size)
             {
                 // Cache is full, export oldest netflow
-                nf_export(cache, cache->last, args, current_time);
+                nf_export(cache, cache->last, args, sysuptime, current_time);
             }
             create_new_netflow(cache, tmp_data, current_time);
 
@@ -431,7 +437,7 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
         }
     }   // while
 
-    export_remaining_nfs(cache, args, current_time);
+    export_remaining_nfs(cache, args, sysuptime, current_time);
     cache = NULL;
     nf_data_dtor(tmp_data);
     tmp_data = NULL;
