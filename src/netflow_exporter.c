@@ -212,7 +212,7 @@ void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t sys
     // Fill out header informations
     nf_datagram->version = htons(5);
     nf_datagram->count = htons(1);
-    nf_datagram->SysUptime = htonl(sysuptime / MILISECONDS);
+    nf_datagram->SysUptime = htonl((current_time - sysuptime) / MILISECONDS);
     nf_datagram->unix_secs = htonl(current_time / MIKROSECONDS);
     nf_datagram->unix_nsecs = htonl((current_time * 1000) % NANOSECONDS);
     nf_datagram->flow_sequence = htonl(exported_flows);
@@ -337,7 +337,7 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
     nf_cache_init(cache);
 
     uint64_t current_time;
-    uint64_t sysuptime = 0;
+    uint64_t sysuptime = 0;     // Capture time of the first packet from pcap file
     nf_data_t *tmp_data = nf_data_ctor();
 
     const u_char *frame;
