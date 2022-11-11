@@ -10,17 +10,6 @@
 
 #pragma region CTORS_DTORS
 
-timeval_t *timeval_ctor()
-{
-    timeval_t *timeval = (timeval_t *)malloc(sizeof(struct timeval));
-    if (timeval == NULL)
-    {
-        fprintf(stderr, "Allocation of struct timeval failed.\n");
-        exit(INTERNAL_ERROR);
-    }
-    return timeval;
-}
-
 nf_key_t *nf_key_ctor()
 {
     nf_key_t *nf_key = (nf_key_t *)malloc(sizeof(struct nf_key));
@@ -41,8 +30,6 @@ nf_data_t *nf_data_ctor()
         exit(INTERNAL_ERROR);
     }
     nf_data->key = nf_key_ctor();
-    nf_data->first_sys = timeval_ctor();
-    nf_data->last_sys = timeval_ctor();
     return nf_data;
 }
 
@@ -76,10 +63,6 @@ void nf_data_dtor(nf_data_t *nf_data)
 {
     free(nf_data->key);
     nf_data->key = NULL;
-    free(nf_data->first_sys);
-    nf_data->first_sys = NULL;
-    free(nf_data->last_sys);
-    nf_data->last_sys = NULL;
     free(nf_data);
 }
 
@@ -160,21 +143,10 @@ void nf_delete(nf_cache_t *cache, nf_t *nf_todelete)
 bool nf_equals(nf_key_t *existing_key, nf_key_t *loaded_key)
 {
     return existing_key->ip_protocol == loaded_key->ip_protocol &&
-        (
-           (
            existing_key->src_ip      == loaded_key->src_ip      &&
            existing_key->dst_ip      == loaded_key->dst_ip      &&
            existing_key->src_port    == loaded_key->src_port    &&
-           existing_key->dst_port    == loaded_key->dst_port
-           )
-        ||
-           (
-           existing_key->src_ip      == loaded_key->dst_ip      &&
-           existing_key->dst_ip      == loaded_key->src_ip      &&
-           existing_key->src_port    == loaded_key->dst_port    &&
-           existing_key->dst_port    == loaded_key->src_port
-           )
-        );
+           existing_key->dst_port    == loaded_key->dst_port;
 }
 
 /// @brief Get netflow

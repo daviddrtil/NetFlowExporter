@@ -13,7 +13,6 @@
 // Constants for program usage
 #define IP_ADDRESS_LENGHT_IN_BYTES 4
 #define WORDS2BYTES_SIZE 4          // In header is stored only 4 bit number that specify number of 32-bit words
-#define USEC_IN_SECOND 1000000
 
 // Protocol types
 #define IPV4_PROTOCOL   0x0800
@@ -68,15 +67,13 @@ typedef struct netflow_datagram_v5
     uint16_t pad2;
 } netflow_datagram_v5_t;
 
+// Used typedef to get rid of writing struct
 typedef struct bpf_program bpf_program_t;
+typedef struct timeval timeval_t;
 
-void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args);
+void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t current_time);
 
-struct nf_v5_packet
-{
-    int neco;
-} nf_v5_packet_t;
-
+// todo add other function definitions
 
 #endif
 

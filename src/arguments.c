@@ -173,6 +173,7 @@ args_t *parse_arguments(int argc, char **argv)
                 exit(INVALID_ARGUMENT);
             }
             args->active_interval = convert_string2int(argv[i + 1], "Invalid argument -a, it has wrong number of interval in seconds.");
+            args->active_interval *= MIKROSECONDS;
         }
         else if (!strcmp(argv[i], "-i"))
         {
@@ -182,6 +183,7 @@ args_t *parse_arguments(int argc, char **argv)
                 exit(INVALID_ARGUMENT);
             }
             args->inactive_interval = convert_string2int(argv[i + 1], "Invalid argument -i, it has wrong number of interval in seconds.");
+            args->inactive_interval *= MIKROSECONDS;
         }
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help"))
         {
