@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/flow",
-            "args": ["-a", "60", "-i", "10", "-c", "0.0.0.0:2055", "-f", "${workspaceFolder}/pcap_files/tcp-fin.pcap"],
+            "args": ["-a", "60", "-i", "10", "-c", "0.0.0.0", "-f", "${workspaceFolder}/pcap_files/tcp-fin.pcap"],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "build"
         }

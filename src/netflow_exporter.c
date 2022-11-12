@@ -199,7 +199,8 @@ void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t sys
     get_ipv4_address(nf_to_export->data->key->dst_ip, dst_ip);
     int src_port = nf_to_export->data->key->src_port;
     int dst_port = nf_to_export->data->key->dst_port;
-    printf("Exported nf with: %s:%d -> %s:%d.\n", src_ip, src_port, dst_ip, dst_port);
+    static int cnt_exported = 0;
+    printf("%d. Exported nf with: %s:%d -> %s:%d.\n", cnt_exported++, src_ip, src_port, dst_ip, dst_port);
 
     static int exported_flows = 0;
     uint8_t compressed_datagram[NETFLOW_DATAGRAM_V5_SIZE];
@@ -277,10 +278,15 @@ void check_timers(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t 
                 printf("UDP:");
 
             if (active_diff > args->active_interval)
-                printf("Active\n");
+            {
+                static int cnt_active = 0;
+                printf("Active:[%d]\n", cnt_active++);
+            }
             else
-                printf("Inactive\n");
-
+            {
+                static int cnt_inactive = 0;
+                printf("Inactive:[%d]\n", cnt_inactive++);
+            }
             // Export outdated netflow
             nf_export(cache, tmp_nf, args, sysuptime, current_time);
         }
@@ -328,6 +334,8 @@ void export_remaining_nfs(nf_cache_t *cache, args_t *args, uint64_t sysuptime, u
     while (cur_nf != NULL)
     {
         prev_nf = cur_nf->prev;
+        static int cnt_exp = 0;
+        printf("end:[%d]", cnt_exp++);
         nf_export(cache, cur_nf, args, sysuptime, current_time);
         cur_nf = prev_nf;
     }
@@ -415,6 +423,8 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
             update_netflow(existing_nf, tmp_data, current_time);
             if (tcp_fin || tcp_reset)
             {
+                static int fin = 0;
+                printf("fin:[%d]\n", fin++);
                 // TCP connection was ended, netflow can be exported
                 nf_export(cache, existing_nf, args, sysuptime, current_time);
             }

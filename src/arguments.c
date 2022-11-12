@@ -155,7 +155,7 @@ args_t *parse_arguments(int argc, char **argv)
             }
             collector_addr[j] = '\0';    // end string
 
-            if (strcmp(port_number_str, "2055") != 0)
+            if (port_number_str[0] != '\0' && strcmp(port_number_str, "2055") != 0)
             {
                 port_number = convert_string2int(port_number_str, "Invalid argument -c, it has invalid port number.");
                 if (port_number < 0 || port_number > 65535)
