@@ -174,9 +174,9 @@ uint64_t convert_timeval2int(timeval_t *time)
     return time->tv_sec * MIKROSECONDS + time->tv_usec;
 }
 
-void send_netflow(int socket_id, uint8_t *data, int flags)
+void send_netflow(int socket_id, uint8_t *data)
 {
-    int send_status = send(socket_id, data, NETFLOW_DATAGRAM_V5_SIZE, flags);
+    int send_status = send(socket_id, data, NETFLOW_DATAGRAM_V5_SIZE, 0);
     if (send_status == -1)
     {
         fprintf(stderr, "Failed to send data to server with function send().\n");
@@ -242,7 +242,7 @@ void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t sys
     nf_datagram->dst_mask = 0;
     nf_datagram->pad2 = 0;
 
-    send_netflow(args->socket_id, compressed_datagram, nf_data->tcp_flags);
+    send_netflow(args->socket_id, compressed_datagram);
     nf_delete(cache, nf_to_export);
     exported_flows++;
 }
@@ -261,6 +261,7 @@ void check_timers(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t 
         if (active_diff < 0 || inactive_diff < 0)
         {
             // Packets with incorrect order are skipped
+            tmp_nf = tmp_nf_prev;
             continue;
         }
 
@@ -283,6 +284,7 @@ void check_timers(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t 
             // Export outdated netflow
             nf_export(cache, tmp_nf, args, sysuptime, current_time);
         }
+
         tmp_nf = tmp_nf_prev;
     }   // while
 }
@@ -303,6 +305,7 @@ void create_new_netflow(nf_cache_t *cache, nf_data_t *loaded_data, uint64_t curr
     nf_data->first_sys = current_time;
     nf_data->last_sys  = current_time;
     nf_data->tcp_flags = loaded_data->tcp_flags;
+    nf_data->tos = loaded_data->tos;
     nf_data->dOctets = loaded_data->dOctets;
     nf_data->dPkts = 1;
 
@@ -386,7 +389,7 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
             if (ip_protocol == TCP_PROTOCOL)
             {
                 struct tcphdr *tcp_header = (struct tcphdr *)data;
-                tmp_data->key->src_port = tcp_header->th_sport;     // todo nema tu byt jiny byte order? ntohs()?
+                tmp_data->key->src_port = tcp_header->th_sport;
                 tmp_data->key->dst_port = tcp_header->th_dport;
                 tmp_data->tcp_flags = tcp_header->th_flags;
                 tcp_fin = (bool)tcp_header->fin;

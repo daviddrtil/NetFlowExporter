@@ -107,6 +107,7 @@ void nf_delete(nf_cache_t *cache, nf_t *nf_todelete)
 {
     if (nf_todelete->prev == NULL && nf_todelete->next == NULL)
     {
+        // Is only 1 item in cache
         cache->first = NULL;
         cache->last = NULL;
     }
