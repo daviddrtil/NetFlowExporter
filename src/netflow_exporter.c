@@ -81,7 +81,7 @@ int create_client_socket(args_t *args)
     return socket_id;
 }
 
-pcap_t *pcap_open_file(char *pcap_file_name)
+pcap_t *pcap_open_file(char *pcap_file_name, args_t *args)
 {
     char errbuffer[PCAP_ERRBUF_SIZE] = {'\0'};
     pcap_t *pcap_file = pcap_open_offline(pcap_file_name, errbuffer);
@@ -96,12 +96,14 @@ pcap_t *pcap_open_file(char *pcap_file_name)
             fprintf(stderr, "Failed to load pcap file [%s]. Error message: [%s].\n", 
                 pcap_file_name, errbuffer);
         }
+        close(args->socket_id);
+        args_dtor(args);
         exit(PCAP_FUNCTION_FAILED);
     }
     return pcap_file;
 }
 
-bpf_program_t *set_display_filter(pcap_t *pcap_file, const char *display_filter_str)
+bpf_program_t *set_display_filter(pcap_t *pcap_file, args_t *args, const char *display_filter_str)
 {
     // Check and recompile the filter of packets
     bpf_program_t *packet_filter = (bpf_program_t *)malloc(sizeof(struct bpf_program));
@@ -117,6 +119,9 @@ bpf_program_t *set_display_filter(pcap_t *pcap_file, const char *display_filter_
         fprintf(stderr, "Pcap_compile failed to compile filter \'%s\' with error code %d.\n",
                     display_filter_str, pcap_compile_error);
         fprintf(stderr, "Error message: \'%s\'\n", filter_error_message);
+        pcap_close(pcap_file);
+        close(args->socket_id);
+        args_dtor(args);
         exit(PCAP_FUNCTION_FAILED);
     }
 
@@ -125,8 +130,12 @@ bpf_program_t *set_display_filter(pcap_t *pcap_file, const char *display_filter_
     if (pcap_setfilter_error != 0)
     {
         char *setfilter_error_message = pcap_geterr(pcap_file);
-        fprintf(stderr, "Pcap_setfilter failed to set filter \'%s\' with error code %d.\n", display_filter_str, pcap_setfilter_error);
+        fprintf(stderr, "Pcap_setfilter failed to set filter \'%s\' with error code %d.\n",
+            display_filter_str, pcap_setfilter_error);
         fprintf(stderr, "Error message: \'%s\'\n", setfilter_error_message);
+        pcap_close(pcap_file);
+        close(args->socket_id);
+        args_dtor(args);
         exit(PCAP_FUNCTION_FAILED);
     }
     return packet_filter;
@@ -192,16 +201,6 @@ void send_netflow(int socket_id, uint8_t *data)
 // Parse to netflow v5 format
 void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t sysuptime, uint64_t current_time)
 {
-    // Neat print - DEBUG only! // todo smazat
-    char src_ip[IPV4_ADDRESS_LENGHT] = {'\0'};
-    get_ipv4_address(nf_to_export->data->key->src_ip, src_ip);
-    char dst_ip[IPV4_ADDRESS_LENGHT] = {'\0'};
-    get_ipv4_address(nf_to_export->data->key->dst_ip, dst_ip);
-    int src_port = nf_to_export->data->key->src_port;
-    int dst_port = nf_to_export->data->key->dst_port;
-    static int cnt_exported = 0;
-    printf("%d. Exported nf with: %s:%d -> %s:%d.\n", cnt_exported++, src_ip, src_port, dst_ip, dst_port);
-
     static int exported_flows = 0;
     uint8_t compressed_datagram[NETFLOW_DATAGRAM_V5_SIZE];
     netflow_datagram_v5_t *nf_datagram = (netflow_datagram_v5_t *)compressed_datagram;
@@ -243,9 +242,19 @@ void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t sys
     nf_datagram->dst_mask = 0;
     nf_datagram->pad2 = 0;
 
+    // Neat print - DEBUG only! // todo smazat
+    char src_ip[IPV4_ADDRESS_LENGHT] = {'\0'};
+    get_ipv4_address(nf_to_export->data->key->src_ip, src_ip);
+    char dst_ip[IPV4_ADDRESS_LENGHT] = {'\0'};
+    get_ipv4_address(nf_to_export->data->key->dst_ip, dst_ip);
+    int src_port = nf_to_export->data->key->src_port;
+    int dst_port = nf_to_export->data->key->dst_port;
+    printf("Exported %3d. nf with: %15s:%-5d -> %15s:%-5d\n", exported_flows + 1, src_ip, src_port, dst_ip, dst_port);
+
     send_netflow(args->socket_id, compressed_datagram);
     nf_delete(cache, nf_to_export);
     exported_flows++;
+
 }
 
 void check_timers(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t current_time)
@@ -269,23 +278,13 @@ void check_timers(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t 
         if (active_diff > args->active_interval || inactive_diff > args->inactive_interval)
         {
             // Neat print - DEBUG only! // todo smazat
-            int ip_protocol = tmp_nf->data->key->ip_protocol;
-            if (ip_protocol == ICMP_PROTOCOL)
-                printf("ICMP:");
-            else if (ip_protocol == TCP_PROTOCOL)
-                printf("TCP:");
-            else if (ip_protocol == UDP_PROTOCOL)
-                printf("UDP:");
-
             if (active_diff > args->active_interval)
             {
-                static int cnt_active = 0;
-                printf("Active:[%d]\n", cnt_active++);
+                printf("Due to expiration of Active timer:\n");
             }
             else
             {
-                static int cnt_inactive = 0;
-                printf("Inactive:[%d]\n", cnt_inactive++);
+                printf("Due to expiration of INactive timer:\n");
             }
             // Export outdated netflow
             nf_export(cache, tmp_nf, args, sysuptime, current_time);
@@ -329,13 +328,12 @@ void update_netflow(nf_t *nf_to_update, nf_data_t *tmp_data, uint64_t current_ti
 // Exports remaining netflows in cache and dispose the cache 
 void export_remaining_nfs(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t current_time)
 {
+    printf("\nExport of remaining netflows in cache:\n");
     nf_t *cur_nf = cache->last;
     nf_t *prev_nf;
     while (cur_nf != NULL)
     {
         prev_nf = cur_nf->prev;
-        static int cnt_exp = 0;
-        printf("end:[%d]", cnt_exp++);
         nf_export(cache, cur_nf, args, sysuptime, current_time);
         cur_nf = prev_nf;
     }
@@ -423,9 +421,8 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
             update_netflow(existing_nf, tmp_data, current_time);
             if (tcp_fin || tcp_reset)
             {
-                static int fin = 0;
-                printf("fin:[%d]\n", fin++);
                 // TCP connection was ended, netflow can be exported
+                printf("Due to obtaining fin flag:\n");
                 nf_export(cache, existing_nf, args, sysuptime, current_time);
             }
         }
@@ -435,6 +432,7 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
             if (cache->nf_cnt + 1 > args->max_cache_size)
             {
                 // Cache is full, export oldest netflow
+                printf("Due to reaching maximum cache capacity:\n");
                 nf_export(cache, cache->last, args, sysuptime, current_time);
             }
             create_new_netflow(cache, tmp_data, current_time);
@@ -446,7 +444,8 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
             get_ipv4_address(tmp_data->key->dst_ip, dst_ip);
             int src_port = tmp_data->key->src_port;
             int dst_port = tmp_data->key->dst_port;
-            printf("Inserted nf with: %s:%d -> %s:%d.\n", src_ip, src_port, dst_ip, dst_port);
+            static int inserted_cnt = 1;
+            printf("Inserted %3d. nf with: %15s:%-5d -> %15s:%-5d\n", inserted_cnt++, src_ip, src_port, dst_ip, dst_port);
         }
     }   // while
 
@@ -476,8 +475,8 @@ int main(int argc, char **argv)
     args_t *args = parse_arguments(argc, argv);
     args->socket_id = create_client_socket(args);
 
-    pcap_t *pcap_file = pcap_open_file(args->pcap_file_name);
-    bpf_program_t *packet_filter = set_display_filter(pcap_file, DISPLAY_FILTER);
+    pcap_t *pcap_file = pcap_open_file(args->pcap_file_name, args);
+    bpf_program_t *packet_filter = set_display_filter(pcap_file, args, DISPLAY_FILTER);
     process_pcap_file(pcap_file, args); // Main program loop
 
     // Flow export is done, all allocated structures can be freed and opened files can be closed
