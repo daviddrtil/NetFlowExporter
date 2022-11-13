@@ -26,6 +26,7 @@
 #define __FAVOR_BSD
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <netdb.h>
 
 // Error codes
 #define PROCESS_ABORTED        9
