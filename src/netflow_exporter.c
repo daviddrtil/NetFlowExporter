@@ -410,7 +410,7 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
             if (tmp_data->tcp_flags & TH_FIN || tmp_data->tcp_flags & TH_RST)
             {
                 // TCP connection was ended, netflow can be exported
-                log_netflow_info("Due to obtaining fin flag:\n");
+                log_netflow_info("Due to obtaining fin or reset flag:\n");
                 nf_export(cache, existing_nf, args, sysuptime, current_time);
             }
         }
@@ -424,7 +424,13 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
                 nf_export(cache, cache->last, args, sysuptime, current_time);
             }
             create_new_netflow(cache, tmp_data, current_time);
-            
+            if (tmp_data->tcp_flags & TH_FIN || tmp_data->tcp_flags & TH_RST)
+            {
+                // TCP connection was ended, netflow can be exported
+                log_netflow_info("Due to obtaining fin or reset flag:\n");
+                nf_export(cache, cache->first, args, sysuptime, current_time);
+            }
+
             // Log netflow inserted to cache
             static int inserted_cnt = 1;
             log_netflow_info("Inserted %3d. nf with: ", inserted_cnt++);
