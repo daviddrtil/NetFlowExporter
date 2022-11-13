@@ -33,7 +33,7 @@ void args_init(args_t *args)
     args->pcap_file_name = DEFAULT_PCAP_FILE;
     args->active_interval = DEFAULT_ACTIVE_TIMER;
     args->inactive_interval = DEFAULT_INACTIVE_TIMER;
-    args->flow_cache_size = DEFAULT_CACHE_SIZE;
+    args->max_cache_size = DEFAULT_CACHE_SIZE;
 }
 
 void args_dtor(args_t *args)
@@ -157,7 +157,7 @@ args_t *parse_arguments(int argc, char **argv)
 
             if (port_number_str[0] != '\0' && strcmp(port_number_str, "2055") != 0)
             {
-                port_number = convert_string2int(port_number_str, "Invalid argument -c, it has invalid port number.");
+                port_number = convert_string2int(port_number_str, "Invalid argument -c, it has invalid port number. ");
                 if (port_number < 0 || port_number > 65535)
                 {
                     fprintf(stderr, "Invalid value of port number '%d', it's out of range. Cannot be lower than 0 or bigger than 65535.\n", port_number);
@@ -172,7 +172,12 @@ args_t *parse_arguments(int argc, char **argv)
                 fprintf(stderr, "Not enough arguments, argument -a is missing interval lenght.\n");
                 exit(INVALID_ARGUMENT);
             }
-            args->active_interval = convert_string2int(argv[i + 1], "Invalid argument -a, it has wrong number of interval in seconds.");
+            args->active_interval = convert_string2int(argv[i + 1], "Invalid argument -a, it has wrong number of interval in seconds. ");
+            if (convert_string2int(argv[i + 1], "") <= 0)
+            {
+                fprintf(stderr, "Argument -a cannot have interval lenght zero or negative.\n");
+                exit(INVALID_ARGUMENT);
+            }
             args->active_interval *= MIKROSECONDS;
         }
         else if (!strcmp(argv[i], "-i"))
@@ -182,8 +187,27 @@ args_t *parse_arguments(int argc, char **argv)
                 fprintf(stderr, "Not enough arguments, argument -i is missing interval lenght.\n");
                 exit(INVALID_ARGUMENT);
             }
-            args->inactive_interval = convert_string2int(argv[i + 1], "Invalid argument -i, it has wrong number of interval in seconds.");
+            args->inactive_interval = convert_string2int(argv[i + 1], "Invalid argument -i, it has wrong number of interval in seconds. ");
+            if (convert_string2int(argv[i + 1], "") <= 0)
+            {
+                fprintf(stderr, "Argument -i cannot have interval lenght zero or negative.\n");
+                exit(INVALID_ARGUMENT);
+            }
             args->inactive_interval *= MIKROSECONDS;
+        }
+        else if (!strcmp(argv[i], "-m"))
+        {
+            if (i + 1 == argc)
+            {
+                fprintf(stderr, "Not enough arguments, argument -m is missing number of the maximum cache size.\n");
+                exit(INVALID_ARGUMENT);
+            }
+            args->max_cache_size = convert_string2int(argv[i + 1], "Invalid argument -m, it has wrong number of the maximum cache size. ");
+            if (args->max_cache_size <= 0)
+            {
+                fprintf(stderr, "Argument -m cannot have the maximum cache size zero or negative.\n");
+                exit(INVALID_ARGUMENT);
+            }
         }
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help"))
         {

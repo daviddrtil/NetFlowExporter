@@ -432,7 +432,7 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
         else
         {
             // New Netflow has to be created
-            if (cache->nf_cnt + 1 > args->flow_cache_size)
+            if (cache->nf_cnt + 1 > args->max_cache_size)
             {
                 // Cache is full, export oldest netflow
                 nf_export(cache, cache->last, args, sysuptime, current_time);

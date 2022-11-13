@@ -57,7 +57,7 @@ typedef struct args
     char *pcap_file_name;
     uint64_t active_interval;       // Measured in microsecond (us)
     uint64_t inactive_interval;     // Measured in microsecond (us)
-    int flow_cache_size;
+    int max_cache_size;
 } args_t;
 
 
