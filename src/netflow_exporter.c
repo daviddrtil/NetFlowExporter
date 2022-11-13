@@ -73,12 +73,14 @@ int create_client_socket(args_t *args)
     int socket_id = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (socket_id == 0)
     {
+        args_dtor(args);
         fprintf(stderr, "Failed to create a socket with collector address.\n");
         exit(SOCKET_FUNCTION_FAILED);
     }
 
     if (connect(socket_id, (struct sockaddr *)&args->collector_addr, sizeof(args->collector_addr)) == -1)
     {
+        args_dtor(args);
         fprintf(stderr, "Failed connect to server with socket_connect().\n");
         exit(SOCKET_FUNCTION_FAILED);
     }
@@ -367,8 +369,6 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
         tmp_data->dOctets = htons(ip_header->ip_len);
         tmp_data->tos = ip_header->ip_tos;
         tmp_data->tcp_flags = 0;
-        bool tcp_fin = false;
-        bool tcp_reset = false;
 
         // Resolve IP protocol
         int ip_protocol = ip_header->ip_p;
@@ -388,8 +388,6 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
                 tmp_data->key->src_port = tcp_header->th_sport;
                 tmp_data->key->dst_port = tcp_header->th_dport;
                 tmp_data->tcp_flags = tcp_header->th_flags;
-                tcp_fin = (bool)tcp_header->fin;
-                tcp_reset = (bool)tcp_header->rst;
             }
             else
             {
@@ -409,7 +407,7 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
         {
             // NetFlow exists, update its data
             update_netflow(existing_nf, tmp_data, current_time);
-            if (tcp_fin || tcp_reset)
+            if (tmp_data->tcp_flags & TH_FIN || tmp_data->tcp_flags & TH_RST)
             {
                 // TCP connection was ended, netflow can be exported
                 log_netflow_info("Due to obtaining fin flag:\n");
