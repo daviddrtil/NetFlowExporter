@@ -4,7 +4,7 @@
 # Date:		2022-10-01
 
 CC=gcc
-CFLAGS=-std=gnu11 -Wall -Wno-unknown-pragmas
+CFLAGS=-std=gnu11 -Wall -Wno-unknown-pragmas -Wunused-value
 FILES=./src/*.c ./src/*.h
 EXECUTABLE=flow
 

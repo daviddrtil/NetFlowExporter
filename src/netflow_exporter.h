@@ -71,9 +71,35 @@ typedef struct netflow_datagram_v5
 typedef struct bpf_program bpf_program_t;
 typedef struct timeval timeval_t;
 
+void handle_sigint(int sig);
+
+int create_client_socket(args_t *args);
+
+pcap_t *pcap_open_file(char *pcap_file_name, args_t *args);
+
+bpf_program_t *set_display_filter(pcap_t *pcap_file, args_t *args, const char *display_filter_str);
+
+uint64_t convert_timeval2int(timeval_t *time);
+
+void send_netflow(int socket_id, uint8_t *data);
+
+void get_readable_ipv4_address(uint32_t ip_address_number, char *ip_address_buffer);
+
+void log_netflow_id(nf_key_t *nf_to_log);
+
 void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t sysuptime, uint64_t current_time);
 
-// todo add other function definitions
+void check_timers(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t current_time);
+
+void create_new_netflow(nf_cache_t *cache, nf_data_t *loaded_data, uint64_t current_time);
+
+void update_netflow(nf_t *nf_to_update, nf_data_t *tmp_data, uint64_t current_time);
+
+void export_remaining_nfs(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t current_time);
+
+void process_pcap_file(pcap_t *pcap_file, args_t *args);
+
+void cleanup_on_exit(args_t *args, pcap_t *pcap_file, bpf_program_t *packet_filter);
 
 #endif
 

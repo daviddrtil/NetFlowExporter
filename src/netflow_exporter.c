@@ -55,7 +55,12 @@
 // ~/Desktop/isa_domik/flow -c 0.0.0.0:2055 -f /home/daviddrtil/Desktop/ISA_project/pcap_files/icmp.pcap
 // sudo softflowd -v 5 -n 0.0.0.0:2055 -r /home/daviddrtil/Desktop/ISA_project/pcap_files/icmp.pcap
 
-//todo add to documentation: https://www.cisco.com/c/en/us/td/docs/net_mgmt/netflow_collection_engine/3-6/user/guide/format.html
+#define LOG_NETFLOWS_PROCESSING_ENABLED true
+#if defined(LOG_NETFLOWS_PROCESSING_ENABLED) && LOG_NETFLOWS_PROCESSING_ENABLED == true
+    #define log_netflow_info printf
+#else
+    #define log_netflow_info
+#endif
 
 void handle_sigint(int sig)
 {
@@ -65,7 +70,7 @@ void handle_sigint(int sig)
 
 int create_client_socket(args_t *args)
 {
-    int socket_id = socket(AF_INET, SOCK_DGRAM, 0); // todo try with IPPROTO_UDP
+    int socket_id = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (socket_id == 0)
     {
         fprintf(stderr, "Failed to create a socket with collector address.\n");
@@ -141,43 +146,6 @@ bpf_program_t *set_display_filter(pcap_t *pcap_file, args_t *args, const char *d
     return packet_filter;
 }
 
-// todo pravdepodobne to nebude potreba
-void get_timestamp(struct pcap_pkthdr *pcap_header, char *timestamp_buffer)
-{
-    struct timeval *tv = &pcap_header->ts;
-    struct tm *gt = localtime(&tv->tv_sec);
-    int ms = (tv->tv_usec) / 1000;
-    int offset = gt->tm_gmtoff / 60;
-
-    // Change sign of offset (zone)
-    char sign = '+';
-    if(offset < 0)
-    {
-        sign = '-';
-        offset = -offset;
-    }
-
-    // Load string with timestamp
-    char date[DATE_LENGHT];
-    strftime(date, DATE_LENGHT, "%Y-%m-%dT%H:%M:%S", gt);
-    sprintf(timestamp_buffer, "%s.%03d%c%02d:%02d", date, ms, sign, offset / 60, offset % 60);
-}
-
-void get_ipv4_address(uint32_t ip_address_number, char *ip_address_buffer)
-{
-    for (int i = 0; i < IP_ADDRESS_LENGHT_IN_BYTES; i++)
-    {
-        if (i > 0)
-        {
-            strcat(ip_address_buffer, ".");
-        }
-        char tmp[4];
-        sprintf(tmp, "%d", ((u_char *)(&ip_address_number))[i]);
-        strcat(ip_address_buffer, tmp);
-    }
-    ip_address_buffer[IPV4_ADDRESS_LENGHT - 1] = '\0';
-}
-
 uint64_t convert_timeval2int(timeval_t *time)
 {
     return time->tv_sec * MIKROSECONDS + time->tv_usec;
@@ -194,8 +162,37 @@ void send_netflow(int socket_id, uint8_t *data)
     else if (send_status != NETFLOW_DATAGRAM_V5_SIZE)
     {
         fprintf(stderr, "Failed to send data to server with function send(). Buffer written partially.\n");
-        //exit(SOCKET_FUNCTION_FAILED);
+        exit(SOCKET_FUNCTION_FAILED);
     }
+}
+
+void get_readable_ipv4_address(uint32_t ip_address_number, char *ip_address_buffer)
+{
+    for (int i = 0; i < IP_ADDRESS_LENGHT_IN_BYTES; i++)
+    {
+        if (i > 0)
+        {
+            strcat(ip_address_buffer, ".");
+        }
+        char tmp[4];
+        sprintf(tmp, "%d", ((u_char *)(&ip_address_number))[i]);
+        strcat(ip_address_buffer, tmp);
+    }
+    ip_address_buffer[IPV4_ADDRESS_LENGHT - 1] = '\0';
+}
+
+void log_netflow_id(nf_key_t *nf_to_log)
+{
+    char src_ip[IPV4_ADDRESS_LENGHT] = {'\0'};
+    get_readable_ipv4_address(nf_to_log->src_ip, src_ip);
+
+    char dst_ip[IPV4_ADDRESS_LENGHT] = {'\0'};
+    get_readable_ipv4_address(nf_to_log->dst_ip, dst_ip);
+    
+    int src_port = nf_to_log->src_port;
+    int dst_port = nf_to_log->dst_port;
+    
+    log_netflow_info("%15s:%-5d -> %15s:%-5d\n", src_ip, src_port, dst_ip, dst_port);
 }
 
 // Parse to netflow v5 format
@@ -242,19 +239,13 @@ void nf_export(nf_cache_t *cache, nf_t *nf_to_export, args_t *args, uint64_t sys
     nf_datagram->dst_mask = 0;
     nf_datagram->pad2 = 0;
 
-    // Neat print - DEBUG only! // todo smazat
-    char src_ip[IPV4_ADDRESS_LENGHT] = {'\0'};
-    get_ipv4_address(nf_to_export->data->key->src_ip, src_ip);
-    char dst_ip[IPV4_ADDRESS_LENGHT] = {'\0'};
-    get_ipv4_address(nf_to_export->data->key->dst_ip, dst_ip);
-    int src_port = nf_to_export->data->key->src_port;
-    int dst_port = nf_to_export->data->key->dst_port;
-    printf("Exported %3d. nf with: %15s:%-5d -> %15s:%-5d\n", exported_flows + 1, src_ip, src_port, dst_ip, dst_port);
+    // Log export of netflow
+    log_netflow_info("Exported %3d. nf with: ", exported_flows + 1);
+    log_netflow_id(nf_to_export->data->key);
 
     send_netflow(args->socket_id, compressed_datagram);
     nf_delete(cache, nf_to_export);
     exported_flows++;
-
 }
 
 void check_timers(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t current_time)
@@ -277,16 +268,15 @@ void check_timers(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t 
 
         if (active_diff > args->active_interval || inactive_diff > args->inactive_interval)
         {
-            // Neat print - DEBUG only! // todo smazat
+            // Export outdated netflow
             if (active_diff > args->active_interval)
             {
-                printf("Due to expiration of Active timer:\n");
+                log_netflow_info("Due to expiration of Active timer:\n");
             }
             else
             {
-                printf("Due to expiration of INactive timer:\n");
+                log_netflow_info("Due to expiration of INactive timer:\n");
             }
-            // Export outdated netflow
             nf_export(cache, tmp_nf, args, sysuptime, current_time);
         }
 
@@ -328,7 +318,7 @@ void update_netflow(nf_t *nf_to_update, nf_data_t *tmp_data, uint64_t current_ti
 // Exports remaining netflows in cache and dispose the cache 
 void export_remaining_nfs(nf_cache_t *cache, args_t *args, uint64_t sysuptime, uint64_t current_time)
 {
-    printf("\nExport of remaining netflows in cache:\n");
+    log_netflow_info("\nExport of remaining netflows in cache:\n");
     nf_t *cur_nf = cache->last;
     nf_t *prev_nf;
     while (cur_nf != NULL)
@@ -422,7 +412,7 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
             if (tcp_fin || tcp_reset)
             {
                 // TCP connection was ended, netflow can be exported
-                printf("Due to obtaining fin flag:\n");
+                log_netflow_info("Due to obtaining fin flag:\n");
                 nf_export(cache, existing_nf, args, sysuptime, current_time);
             }
         }
@@ -432,20 +422,15 @@ void process_pcap_file(pcap_t *pcap_file, args_t *args)
             if (cache->nf_cnt + 1 > args->max_cache_size)
             {
                 // Cache is full, export oldest netflow
-                printf("Due to reaching maximum cache capacity:\n");
+                log_netflow_info("Due to reaching maximum cache capacity:\n");
                 nf_export(cache, cache->last, args, sysuptime, current_time);
             }
             create_new_netflow(cache, tmp_data, current_time);
-
-            // todo potom smazat!
-            char src_ip[IPV4_ADDRESS_LENGHT] = {'\0'};
-            get_ipv4_address(tmp_data->key->src_ip, src_ip);
-            char dst_ip[IPV4_ADDRESS_LENGHT] = {'\0'};
-            get_ipv4_address(tmp_data->key->dst_ip, dst_ip);
-            int src_port = tmp_data->key->src_port;
-            int dst_port = tmp_data->key->dst_port;
+            
+            // Log netflow inserted to cache
             static int inserted_cnt = 1;
-            printf("Inserted %3d. nf with: %15s:%-5d -> %15s:%-5d\n", inserted_cnt++, src_ip, src_port, dst_ip, dst_port);
+            log_netflow_info("Inserted %3d. nf with: ", inserted_cnt++);
+            log_netflow_id(tmp_data->key);
         }
     }   // while
 
