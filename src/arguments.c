@@ -9,8 +9,7 @@
 
 void print_help()
 {
-    printf("NetFlow Exporter\n");
-    printf("Generating and exporting NetFlow from captured network traffic.\n");
+    printf("NetFlow Exporter - for generating and exporting NetFlow from captured network traffic\n");
     printf("Usage: \n");
     printf("    ./flow [-f <file>] [-c <netflow_collector>[:<port>]] [-a <active_timer>] [-i <inactive_timer>] [-m <count>]\n");
     printf("    ./flow [-h | --help]\n");
@@ -22,7 +21,7 @@ void print_help()
     printf("    -i <inactive_timer>                 Interval in seconds after which inactive records are exported\n");
     printf("                                        to collector (default: [10 sec]).\n");
     printf("    -m <count>                          Size of flow-cache in records. When maximal size is reached,\n");
-    printf("                                        records from oldest flow are exported to the collector (default: 1024).\n");
+    printf("                                        records from oldest flow are exported to the collector (default: [1024]).\n");
     printf("Arguments can be arbitrarily combined.\n");
     printf("Help:\n");
     printf("    -h | --help                         Prints this help and exit program.\n\n");
@@ -51,7 +50,7 @@ int convert_string2int(char *number, const char *error_message)
     int converted_number = (int)strtol(number, &invalid_part, 10); 
     if (*invalid_part != '\0')
     {
-        fprintf(stderr, "%sFailed to convert number \'%s\'.\n", error_message, number);
+        fprintf(stderr, "%s Failed to convert number \'%s\'.\n", error_message, number);
         exit(INVALID_ARGUMENT);
     }
     return converted_number;
@@ -75,16 +74,6 @@ void load_collector_address(args_t *args, char *arg_address, int port_number)
 
 args_t *parse_arguments(int argc, char **argv)
 {
-    if (argc == 2)
-    {
-        // Print Help
-        if (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))
-        {
-            print_help();
-            exit(EXIT_SUCCESS);
-        }
-    }
-
     // Create argument structure
     args_t *args = (args_t *)malloc(sizeof(struct args));
     if (args == NULL)
@@ -157,10 +146,12 @@ args_t *parse_arguments(int argc, char **argv)
 
             if (port_number_str[0] != '\0' && strcmp(port_number_str, "2055") != 0)
             {
-                port_number = convert_string2int(port_number_str, "Invalid argument -c, it has invalid port number. ");
+                port_number = convert_string2int(port_number_str,
+                                "Invalid argument -c, it has invalid port number.");
                 if (port_number < 0 || port_number > 65535)
                 {
-                    fprintf(stderr, "Invalid value of port number '%d', it's out of range. Cannot be lower than 0 or bigger than 65535.\n", port_number);
+                    fprintf(stderr, "Invalid value of port number '%d', it's out of range. ", port_number);
+                    fprintf(stderr, "Cannot be lower than 0 or bigger than 65535.\n");
                     exit(INVALID_ARGUMENT);
                 }
             }
@@ -172,7 +163,8 @@ args_t *parse_arguments(int argc, char **argv)
                 fprintf(stderr, "Not enough arguments, argument -a is missing interval lenght.\n");
                 exit(INVALID_ARGUMENT);
             }
-            args->active_interval = convert_string2int(argv[i + 1], "Invalid argument -a, it has wrong number of interval in seconds. ");
+            args->active_interval = convert_string2int(argv[i + 1],
+                "Invalid argument -a, it has wrong number of interval in seconds.");
             if (convert_string2int(argv[i + 1], "") <= 0)
             {
                 fprintf(stderr, "Argument -a cannot have interval lenght zero or negative.\n");
@@ -187,7 +179,8 @@ args_t *parse_arguments(int argc, char **argv)
                 fprintf(stderr, "Not enough arguments, argument -i is missing interval lenght.\n");
                 exit(INVALID_ARGUMENT);
             }
-            args->inactive_interval = convert_string2int(argv[i + 1], "Invalid argument -i, it has wrong number of interval in seconds. ");
+            args->inactive_interval = convert_string2int(argv[i + 1],
+                "Invalid argument -i, it has wrong number of interval in seconds.");
             if (convert_string2int(argv[i + 1], "") <= 0)
             {
                 fprintf(stderr, "Argument -i cannot have interval lenght zero or negative.\n");
@@ -202,7 +195,8 @@ args_t *parse_arguments(int argc, char **argv)
                 fprintf(stderr, "Not enough arguments, argument -m is missing number of the maximum cache size.\n");
                 exit(INVALID_ARGUMENT);
             }
-            args->max_cache_size = convert_string2int(argv[i + 1], "Invalid argument -m, it has wrong number of the maximum cache size. ");
+            args->max_cache_size = convert_string2int(argv[i + 1],
+                "Invalid argument -m, it has wrong number of the maximum cache size. ");
             if (args->max_cache_size <= 0)
             {
                 fprintf(stderr, "Argument -m cannot have the maximum cache size zero or negative.\n");
@@ -211,12 +205,18 @@ args_t *parse_arguments(int argc, char **argv)
         }
         else if (!strcmp(argv[i], "-h") || !strcmp(argv[i], "--help"))
         {
-            fprintf(stderr, "Invalid argument help. To print help, no other arguments cannot be set.\n");
-            exit(INVALID_ARGUMENT);
+            if (allocated_collector_addr)
+            {
+                free(collector_addr);
+            }
+            args_dtor(args);
+
+            print_help();
+            exit(EXIT_SUCCESS);
         }
         else
         {
-            fprintf(stderr, "Invalid argument \'%s\'.\n", argv[i]);
+            fprintf(stderr, "Invalid / unknown argument \'%s\'.\n", argv[i]);
             exit(INVALID_ARGUMENT);
         }
     }

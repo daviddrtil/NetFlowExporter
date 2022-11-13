@@ -185,7 +185,7 @@ void send_netflow(int socket_id, uint8_t *data)
     else if (send_status != NETFLOW_DATAGRAM_V5_SIZE)
     {
         fprintf(stderr, "Failed to send data to server with function send(). Buffer written partially.\n");
-        exit(SOCKET_FUNCTION_FAILED);
+        //exit(SOCKET_FUNCTION_FAILED);
     }
 }
 
