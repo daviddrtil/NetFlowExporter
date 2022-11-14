@@ -11,7 +11,7 @@ EXECUTABLE=flow
 $(EXECUTABLE): $(FILES)
 		$(CC) $(CFLAGS) $(FILES) -o $(EXECUTABLE) -lpcap
 
-tar: $(FILES) Makefile Readme.md
+tar: $(FILES) Makefile manual.pdf flow.1
 	tar cvf xdrtil03.tar $^
 
 clean:

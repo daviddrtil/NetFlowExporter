@@ -1,0 +1,47 @@
+// Used cmds:
+// cd ~/Desktop/ISA_project
+// make
+// 1.1) ./flow -c 127.0.0.1:2055 -f /home/daviddrtil/Desktop/ISA_project/pcap_files/icmp.pcap
+// 1.2) ./flow -a 30 -i 8 -c www.google.com:5524 -f /home/daviddrtil/Desktop/ISA/captured_packets/icmp_test.pcap
+// 2)   ./flow -a 30 -i 8 -c www.google.com:5524 -f /home/daviddrtil/Desktop/ISA/captured_packets/active_inactive_test.pcap
+
+// Debugger arguments:
+// "-c", "192.168.0.1:2055", "<", "${workspaceFolder}/../captured_packets/icmp_test.pcap"
+// "-c", "192.168.0.1:2055", "-f", "${workspaceFolder}/../captured_packets/icmp_test.pcap"
+
+
+// Testing:
+// 1) Capture packets:
+//    sudo tcpdump -n -nn -N -s 0 -i enp0s3 -w nf_test.pcap
+// 2) Run collector server / socket:
+//    nfcapd -D -T all -l . -I any -S 2 -p 20550
+// 3) Check if its running:
+//    netstat -n --udp --listen
+// 4) Export nf to collector (it generates nf after 5 minutes):
+//    ./flow -a 30 -i 8 -c 127.0.0.1:20550 -f /home/daviddrtil/Desktop/ISA/nf_test.pcap
+// 5) Generated file try view via nfdump:
+//    nfdump -r nfcapd.current.28664
+//    or
+//    nfdump -I -r nfcapd.current.28664
+// *6) Compare with reference output:
+//    sudo softflowd -v 5 -n 127.0.0.1:2055 -r ./nf_test.pcap
+
+// Domik's anal testing: (flow analyzer)
+// 1) Poslani flows na collector:
+// cd ~/Downloads/isa_domik/
+// nfcapd -D -T all -l . -I any -S 2 -p 20550
+// ./flow -a 30 -i 8 -c 127.0.0.1:20550 -f ./files/tcp-fin.pcap                 (nebo ./files/icmp-timeout.pcap)
+// sudo softflowd -v 5 -n 127.0.0.1:20550 -r ./files/tcp-fin.pcap               (nebo ./files/icmp-timeout.pcap)
+// 
+// 2) Vypsani vypisu:
+// cd ~/Downloads/isa_domik/2022/11/09/16/
+// nfdump -r nfcapd.202211091624
+
+// Kill collector server:
+// fuser -n udp -k 20550
+
+
+// current:
+// ~/Desktop/ISA_project/flow -c 0.0.0.0:2055 -f /home/daviddrtil/Desktop/ISA_project/pcap_files/icmp.pcap
+// ~/Desktop/isa_domik/flow -c 0.0.0.0:2055 -f /home/daviddrtil/Desktop/ISA_project/pcap_files/icmp.pcap
+// sudo softflowd -v 5 -n 0.0.0.0:2055 -r /home/daviddrtil/Desktop/ISA_project/pcap_files/icmp.pcap
