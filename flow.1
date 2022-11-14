@@ -1,0 +1,41 @@
+.TH FLOW 1 2020-02-16 GNU
+
+.SH NAME
+flow - NetFlow exporter v5 of the captured network traffic
+
+.SH SYNOPSIS
+.B flow
+[\fB\-f\fR \fI<file>\fR]
+[\fB\-c\fR \fI<netflow_collector>\fR[\fB\::\fR\fI<port>\fR]\fR]
+[\fB\-a\fR \fI<active_timer>\fR]
+[\fB\-i\fR \fI<inactive_timer>\fR]
+[\fB\-m\fR \fI<count>\fR]
+[\fB\-h | --help\fR]
+
+.SH DESCRIPTION
+.B flow
+Processes input file with captured network traffic. Agregates captured packets into NetFlows by 5-tuple <ip_protocol, src_ip, src_port, dst_ip, dst_port>
+and export them to collector. It's exported 1 packet at the time. Exporting occurs already during file processing, due to active/inactive timers,
+fin/reset tcp-flags, reaching maximum cache capacity. After all packets are proceed, remaining NetFlows in cache are also exported.
+
+.SH OPTIONS
+.TP
+.BR \-f " "  \fI<file>
+File to analyze, without specifying it's input from STDIN.
+.TP
+.BR \-c " " \fI<netflow_collector>[:<port>]
+IP address or hostname of NetFlow collector (default: [127.0.0.1:2055]).
+.TP
+.BR \-a " " \fI<active_timer>
+Interval in seconds after which active records are exported to collector (default: [60 sec]).
+.TP
+.BR \-i " " \fI<inactive_timer>
+Interval in seconds after which inactive records are exported to collector (default: [10 sec]).
+.TP
+.BR \-m " " \fI<count>
+Maximum size of flow-cache in records, after reaching maximum size, records from oldest flow are exported to the collector (default: [1024]).
+.TP
+.BR \-h " " \--help
+Prints help, additional information about program usage.
+
+.SH FILES
